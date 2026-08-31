@@ -17,9 +17,7 @@ from framework.orchestrator import Orchestrator
 from framework.stage import Stage
 
 
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
+# helpers
 
 def _make_attack(id: str, n_stages: int = 2) -> Attack:
     """Compatible with iPhone14,2 / iOS 16.5 — matches simulator defaults."""
@@ -34,9 +32,7 @@ def _make_attack(id: str, n_stages: int = 2) -> Attack:
     )
 
 
-# ---------------------------------------------------------------------------
 # GET_STATE
-# ---------------------------------------------------------------------------
 
 class TestGetState:
     def test_returns_configured_defaults(self, simulator_process):
@@ -49,9 +45,7 @@ class TestGetState:
         assert state.is_locked is True
 
 
-# ---------------------------------------------------------------------------
-# Full success path
-# ---------------------------------------------------------------------------
+# full success path
 
 class TestFullSuccess:
     def test_two_stage_attack_succeeds(self, simulator_process):
@@ -73,9 +67,7 @@ class TestFullSuccess:
         assert outcome.success is True
 
 
-# ---------------------------------------------------------------------------
-# Scripted stage failure
-# ---------------------------------------------------------------------------
+# scripted stage failure
 
 class TestStageFailure:
     def test_stage_1_forced_fail(self, simulator_fail_stage1):
@@ -97,9 +89,7 @@ class TestStageFailure:
         assert outcome.failed_stage == 1
 
 
-# ---------------------------------------------------------------------------
-# Connection drop mid-chain
-# ---------------------------------------------------------------------------
+# connection drop mid-chain
 
 class TestConnectionDrop:
     def test_connection_lost_after_stage_0(self, simulator_drop_after_stage0):
@@ -112,9 +102,7 @@ class TestConnectionDrop:
         assert outcome.failed_stage == 1  # drop happens before stage 1 can respond
 
 
-# ---------------------------------------------------------------------------
 # extract_all over TCP
-# ---------------------------------------------------------------------------
 
 class TestExtractAll:
     def test_extract_all_returns_known_files(self, simulator_process):
@@ -137,9 +125,7 @@ class TestExtractAll:
         assert b"contacts" in content
 
 
-# ---------------------------------------------------------------------------
-# No compatible attack
-# ---------------------------------------------------------------------------
+# no compatible attack
 
 class TestNoCompatibleAttack:
     def test_incompatible_device_model(self, simulator_process):

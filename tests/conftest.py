@@ -12,9 +12,7 @@ from framework.attack import Attack
 from client.fake_device import FakeDevice
 
 
-# ---------------------------------------------------------------------------
-# Shared state / attack fixtures
-# ---------------------------------------------------------------------------
+# shared fixtures
 
 @pytest.fixture
 def sample_state() -> DeviceState:
@@ -84,9 +82,7 @@ def fake_device(sample_state: DeviceState) -> FakeDevice:
     )
 
 
-# ---------------------------------------------------------------------------
-# Integration fixtures (real C simulator subprocess)
-# ---------------------------------------------------------------------------
+# integration fixtures (real C simulator subprocess)
 
 def _free_port() -> int:
     with socket.socket() as s:

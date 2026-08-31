@@ -28,9 +28,7 @@ _B   = "\033[1m"  if _TTY else ""
 _DIM = "\033[2m"  if _TTY else ""
 _RST = "\033[0m"  if _TTY else ""
 
-# ---------------------------------------------------------------------------
-# Session state — selector strategy chosen by the user
-# ---------------------------------------------------------------------------
+# session state — selector strategy chosen by the user
 
 _SELECTOR_KEYS   = ["probability", "priority", "weighted"]
 _SELECTOR_LABELS = [
@@ -41,9 +39,7 @@ _SELECTOR_LABELS = [
 _current_selector_idx: int = 0   # index into _SELECTOR_KEYS
 
 
-# ---------------------------------------------------------------------------
-# Simulator lifecycle
-# ---------------------------------------------------------------------------
+# simulator lifecycle
 
 _sim_proc: subprocess.Popen | None = None
 
@@ -76,9 +72,7 @@ def _stop_simulator() -> None:
     _sim_proc = None
 
 
-# ---------------------------------------------------------------------------
-# Main loop
-# ---------------------------------------------------------------------------
+# main loop
 
 def _press_any_key() -> None:
     sys.stdout.write("\n  press any key to return to menu…\n")

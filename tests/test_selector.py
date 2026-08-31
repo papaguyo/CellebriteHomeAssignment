@@ -38,9 +38,7 @@ def state() -> DeviceState:
     return DeviceState(battery_level=80, ios_version="16.5", model="iPhone14,2", is_locked=True)
 
 
-# ---------------------------------------------------------------------------
 # ProbabilitySelector
-# ---------------------------------------------------------------------------
 
 class TestProbabilitySelector:
     @pytest.fixture
@@ -112,9 +110,7 @@ class TestProbabilitySelector:
         assert result.id == "safe"
 
 
-# ---------------------------------------------------------------------------
 # PrioritySelector
-# ---------------------------------------------------------------------------
 
 class TestPrioritySelector:
     @pytest.fixture
@@ -154,9 +150,7 @@ class TestPrioritySelector:
         assert result.id == "universal"
 
 
-# ---------------------------------------------------------------------------
 # WeightedRandomSelector
-# ---------------------------------------------------------------------------
 
 class TestWeightedRandomSelector:
     @pytest.fixture

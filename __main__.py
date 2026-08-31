@@ -32,9 +32,7 @@ SELECTORS: dict[str, type[Selector]] = {
 }
 
 
-# ---------------------------------------------------------------------------
-# Terminal UI helpers
-# ---------------------------------------------------------------------------
+# terminal helpers
 
 _TTY = sys.stdout.isatty()
 
@@ -138,9 +136,7 @@ def _file_table(files: dict[str, bytes]) -> None:
     print(f"\n  {_DIM}{len(files)} file{'s' if len(files) != 1 else ''} · {total} bytes total{_RST}")
 
 
-# ---------------------------------------------------------------------------
-# Main
-# ---------------------------------------------------------------------------
+# main
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Multi-stage attack orchestrator")
