@@ -8,18 +8,21 @@ against and a test suite covering both.
 
 ## Quick start
 
-```bash
-make -C simulator
-pip install pytest
-```
-
-Run the whole thing end to end:
+On a fresh clone a virtualenv will be created, dependencies will be installed and the C simulator will be built. No other setup required.
 
 ```bash
 ./start.sh
 ```
 
-This builds the simulator if needed, picks the best compatible attack, runs it, and extracts the filesystem. No input required.
+```bash
+./demo_all.sh      # runs happy path, stage failure, and connection drop back to back
+```
+
+```bash
+./interactive.sh   # arrow-key menu: choose selector strategy, pick attack, or run tests
+```
+
+Some addition tags.
 
 ```bash
 ./start.sh --fail-stage 1        # force stage 1 to fail
@@ -27,8 +30,6 @@ This builds the simulator if needed, picks the best compatible attack, runs it, 
 ./start.sh --probabilistic       # roll against each stage's success_probability instead of forcing success
 ./start.sh --selector priority   # use the priority-based selector instead of the default
 ```
-
-`./demo_all.sh` runs all three scenarios back to back. `./interactive.sh` gives you a menu if you want to poke at it by hand.
 
 **Tests:**
 
@@ -46,8 +47,11 @@ framework/          Core library, no I/O of its own
   device.py          Device ABC, DeviceState, error types
   stage.py           Stage & StageResult
   attack.py           Attack dataclass + compatibility check
-  selector.py         Selector ABC
-  selectors/          probability_selector.py (default), priority_selector.py, weighted_random_selector.py
+  selector.py         Selector ABC (strategy interface)
+  selectors/
+    probability_selector.py      Highest estimated success probability (default)
+    priority_selector.py         Fixed priority ranking per attack
+    weighted_random_selector.py  Random, weighted by probability
   orchestrator.py     Picks an attack, runs it
   extractor.py        Reads files off a device once an attack succeeds
 
@@ -65,6 +69,8 @@ tests/
   conftest.py
   test_selector.py, test_orchestrator.py, test_extractor.py   # unit
   test_integration.py                                          # against the real C binary
+
+start.sh / interactive.sh / demo_all.sh   # entry points (create venv, build sim, run)
 ```
 
 The `Device` ABC is the whole point of this layout —
