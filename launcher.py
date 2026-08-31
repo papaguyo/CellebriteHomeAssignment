@@ -23,7 +23,20 @@ PORT       = 9000
 
 _TTY = sys.stdout.isatty()
 _B   = "\033[1m"  if _TTY else ""
+_DIM = "\033[2m"  if _TTY else ""
 _RST = "\033[0m"  if _TTY else ""
+
+# ---------------------------------------------------------------------------
+# Session state — selector strategy chosen by the user
+# ---------------------------------------------------------------------------
+
+_SELECTOR_KEYS   = ["probability", "priority", "weighted"]
+_SELECTOR_LABELS = [
+    "Probability  — highest success chance (default)",
+    "Priority     — fixed priority ranking per attack",
+    "Weighted     — random, weighted by probability",
+]
+_current_selector_idx: int = 0   # index into _SELECTOR_KEYS
 
 
 # ---------------------------------------------------------------------------
@@ -65,17 +78,27 @@ def _stop_simulator() -> None:
 # Main loop
 # ---------------------------------------------------------------------------
 
-MENU_ITEMS = ["Run attack", "Run tests", "Quit"]
-
-
 def _header() -> None:
     title = "  Multi-Stage Attack Orchestrator  "
     bar   = "═" * len(title)
     print(f"\n{_B}╔{bar}╗\n║{title}║\n╚{bar}╝{_RST}\n")
 
 
+def _configure_selector() -> None:
+    global _current_selector_idx
+    idx = arrow_select(
+        _SELECTOR_LABELS,
+        title="Choose a selector strategy:",
+        default=_current_selector_idx,
+    )
+    if idx is not None:
+        _current_selector_idx = idx
+        print(f"  Selector set to: {_B}{_SELECTOR_LABELS[idx].split('—')[0].strip()}{_RST}\n")
+
+
 def main() -> None:
-    # Collect simulator flags from argv (anything that looks like a sim flag)
+    global _current_selector_idx
+
     sim_flags = [a for a in sys.argv[1:] if a.startswith("--")]
 
     if not os.path.isfile(SIMULATOR):
@@ -86,11 +109,15 @@ def main() -> None:
             print("Build failed:\n", result.stderr.decode())
             sys.exit(1)
 
+    MENU_ITEMS = ["Run attack", "Configure selector", "Run tests", "Quit"]
+
     while True:
         _header()
+        sel_name = _SELECTOR_KEYS[_current_selector_idx]
+        print(f"  {_DIM}Selector: {_SELECTOR_LABELS[_current_selector_idx].split('—')[0].strip()}{_RST}\n")
         choice = arrow_select(MENU_ITEMS)
 
-        if choice is None or choice == 2:   # Quit or Esc
+        if choice is None or choice == 3:   # Quit or Esc
             print("Bye.")
             break
 
@@ -99,10 +126,15 @@ def main() -> None:
                 print("Simulator failed to start.")
                 continue
             subprocess.run([PYTHON, os.path.join(ROOT, "__main__.py"),
-                            "--port", str(PORT)])
+                            "--port", str(PORT),
+                            "--selector", sel_name])
             _stop_simulator()
 
-        elif choice == 1:   # Run tests
+        elif choice == 1:   # Configure selector
+            _configure_selector()
+            continue        # skip the trailing print() — header will redraw
+
+        elif choice == 2:   # Run tests
             subprocess.run([PYTHON, os.path.join(ROOT, "test_runner.py")])
 
         print()

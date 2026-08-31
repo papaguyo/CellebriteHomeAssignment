@@ -5,7 +5,8 @@ from dataclasses import dataclass, field
 
 from .attack import Attack
 from .device import Device, DeviceState, ConnectionLostError, DeviceError
-from .selector import Selector, ProbabilitySelector
+from .selector import Selector
+from .selectors import ProbabilitySelector
 
 logger = logging.getLogger(__name__)
 

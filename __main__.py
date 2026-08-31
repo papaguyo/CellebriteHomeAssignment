@@ -15,48 +15,19 @@ import logging
 import sys
 from typing import Callable
 
+from attacks import ATTACKS
 from client.tcp_client import SimulatedDeviceClient
-from framework.attack import Attack
 from framework.device import ConnectionLostError, DeviceState
 from framework.extractor import Extractor
-from framework.selector import ProbabilitySelector
-from framework.stage import Stage
+from framework.selector import Selector
+from framework.selectors import ProbabilitySelector, PrioritySelector, WeightedRandomSelector
 from menu import arrow_select
 
-
-# ---------------------------------------------------------------------------
-# Attack catalogue
-# ---------------------------------------------------------------------------
-
-ATTACKS = [
-    Attack(
-        id="bootrom_exploit",
-        name="Bootrom Exploit",
-        stages=[
-            Stage(id="s0", name="USB handshake",        success_probability=0.95),
-            Stage(id="s1", name="Bootrom overflow",     success_probability=0.85),
-            Stage(id="s2", name="Privilege escalation", success_probability=0.90),
-        ],
-        compatible_models=["iPhone14,2", "iPhone14,3"],
-        min_ios=(16, 0),
-        max_ios=(16, 9),
-        min_battery=20,
-        is_destructive=False,
-    ),
-    Attack(
-        id="checkm8",
-        name="checkm8",
-        stages=[
-            Stage(id="s0", name="DFU mode trigger", success_probability=0.80),
-            Stage(id="s1", name="Heap overflow",    success_probability=0.75),
-        ],
-        compatible_models=["iPhone14,2", "iPhone13,4"],
-        min_ios=(15, 0),
-        max_ios=(17, 9),
-        min_battery=10,
-        is_destructive=True,
-    ),
-]
+SELECTORS: dict[str, type[Selector]] = {
+    "probability": ProbabilitySelector,
+    "priority":    PrioritySelector,
+    "weighted":    WeightedRandomSelector,
+}
 
 
 # ---------------------------------------------------------------------------
@@ -179,6 +150,9 @@ def main() -> int:
                         choices=["DEBUG", "INFO", "WARNING", "ERROR"],
                         help="Framework log level (default: WARNING — use DEBUG for full trace)")
     parser.add_argument("--no-extract", dest="extract", action="store_false", default=True)
+    parser.add_argument("--selector", default="probability",
+                        choices=list(SELECTORS),
+                        help="Attack selection strategy (default: probability)")
     args = parser.parse_args()
 
     logging.basicConfig(
@@ -199,7 +173,7 @@ def main() -> int:
 
             # 2. Attack selection
             _section("Evaluating compatible attacks...")
-            selector = ProbabilitySelector()
+            selector = SELECTORS[args.selector]()
             compatible = [a for a in ATTACKS if a.is_compatible(state)]
             winner = selector.select(ATTACKS, state)
 

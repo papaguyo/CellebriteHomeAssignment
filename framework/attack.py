@@ -26,6 +26,7 @@ class Attack:
     max_ios: tuple[int, int]      # inclusive, e.g. (16, 5)
     min_battery: int              # minimum battery % required
     is_destructive: bool = False
+    priority: int = 0  # lower = higher priority; 0 = unranked
 
     @property
     def estimated_success_probability(self) -> float:
@@ -34,7 +35,7 @@ class Attack:
         return reduce(mul, (s.success_probability for s in self.stages), 1.0)
 
     def is_compatible(self, state: DeviceState) -> bool:
-        if state.model not in self.compatible_models:
+        if self.compatible_models and state.model not in self.compatible_models:
             return False
         if state.battery_level < self.min_battery:
             return False
