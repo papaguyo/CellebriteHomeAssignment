@@ -96,28 +96,44 @@ def _device_table(state: DeviceState) -> None:
         print(f"  {_DIM}{key:<10}{_RST} {val}")
 
 
-def _attack_list(compatible: list[Attack], winner: Attack) -> None:
+def _pick_attack(compatible: list[Attack], recommended: Attack) -> Attack | None:
+    """Show numbered attack list and let the user pick one. Returns None to abort."""
     if not compatible:
-        return
-    print(f"\n  {len(compatible)} attack(s) compatible:\n")
-    col_w = max(len(a.name) for a in compatible) + 2
-    for a in sorted(compatible, key=lambda x: -x.estimated_success_probability):
-        marker  = f"{_G}►{_RST}" if a is winner else " "
-        destr   = f"  {_R}DESTRUCTIVE{_RST}" if a.is_destructive else f"  {_G}non-destructive{_RST}"
-        sel     = f"  {_DIM}← selected{_RST}" if a is winner else ""
-        print(f"  {marker} {a.name:<{col_w}} "
+        return None
+
+    ranked = sorted(compatible, key=lambda x: -x.estimated_success_probability)
+    rec_idx = ranked.index(recommended) + 1
+    col_w = max(len(a.name) for a in ranked) + 2
+
+    print(f"\n  {len(ranked)} attack(s) compatible:\n")
+    for i, a in enumerate(ranked, 1):
+        num    = f"{_B}[{i}]{_RST}"
+        destr  = f"  {_R}DESTRUCTIVE{_RST}" if a.is_destructive else f"  {_G}non-destructive{_RST}"
+        rec    = f"  {_DIM}← recommended{_RST}" if a is recommended else ""
+        print(f"  {num} {a.name:<{col_w}} "
               f"p={a.estimated_success_probability:.2f}  "
               f"{len(a.stages)} stage{'s' if len(a.stages) != 1 else ' '}"
-              f"{destr}{sel}")
+              f"{destr}{rec}")
 
-
-def _confirm(prompt: str) -> bool:
+    print(f"\n  {_B}[q]{_RST} Abort\n")
     try:
-        ans = input(f"\n{prompt} [{_G}Y{_RST}/n]: ").strip().lower()
-        return ans in ("", "y", "yes")
+        raw = input(f"Select attack [{_G}{rec_idx}{_RST}]: ").strip().lower()
     except (EOFError, KeyboardInterrupt):
         print()
-        return False
+        return None
+
+    if raw == "q":
+        return None
+    if raw == "":
+        return recommended
+    try:
+        idx = int(raw)
+        if 1 <= idx <= len(ranked):
+            return ranked[idx - 1]
+    except ValueError:
+        pass
+    print(f"{_Y}Invalid choice — using recommended.{_RST}")
+    return recommended
 
 
 def _stage_line(i: int, n: int, name: str) -> Callable[[bool, str], None]:
@@ -207,32 +223,30 @@ def main() -> int:
                 _no_attacks()
                 return 1
 
-            _attack_list(compatible, winner)
-
-            # 3. Confirm
-            if not _confirm(f"Proceed with '{_B}{winner.name}{_RST}'?"):
+            chosen = _pick_attack(compatible, winner)
+            if chosen is None:
                 print("\nAborted.")
                 return 0
 
             # 4. Run stages
-            print(f"\n[*] Running '{winner.name}' ({len(winner.stages)} stages)...\n")
-            n = len(winner.stages)
-            for i, stage in enumerate(winner.stages):
+            print(f"\n[*] Running '{chosen.name}' ({len(chosen.stages)} stages)...\n")
+            n = len(chosen.stages)
+            for i, stage in enumerate(chosen.stages):
                 done = _stage_line(i + 1, n, stage.name)
                 try:
-                    result = client.run_stage(winner.id, i)
+                    result = client.run_stage(chosen.id, i)
                 except ConnectionLostError as exc:
                     done(False, "connection lost")
-                    _outcome_failure(winner.name, i, stage.name, error=exc)
+                    _outcome_failure(chosen.name, i, stage.name, error=exc)
                     return 1
 
                 done(result.success, result.reason if not result.success else "")
 
                 if not result.success:
-                    _outcome_failure(winner.name, i, stage.name, reason=result.reason)
+                    _outcome_failure(chosen.name, i, stage.name, reason=result.reason)
                     return 1
 
-            _outcome_success(winner.name)
+            _outcome_success(chosen.name)
 
             # 5. Extraction
             if args.extract:
