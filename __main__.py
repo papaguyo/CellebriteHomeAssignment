@@ -21,6 +21,7 @@ from framework.device import ConnectionLostError, DeviceState
 from framework.extractor import Extractor
 from framework.selector import ProbabilitySelector
 from framework.stage import Stage
+from menu import arrow_select
 
 
 # ---------------------------------------------------------------------------
@@ -97,43 +98,26 @@ def _device_table(state: DeviceState) -> None:
 
 
 def _pick_attack(compatible: list[Attack], recommended: Attack) -> Attack | None:
-    """Show numbered attack list and let the user pick one. Returns None to abort."""
+    """Arrow-key attack picker. Returns chosen Attack or None to abort."""
     if not compatible:
         return None
 
-    ranked = sorted(compatible, key=lambda x: -x.estimated_success_probability)
-    rec_idx = ranked.index(recommended) + 1
-    col_w = max(len(a.name) for a in ranked) + 2
+    ranked  = sorted(compatible, key=lambda x: -x.estimated_success_probability)
+    rec_idx = ranked.index(recommended)
 
-    print(f"\n  {len(ranked)} attack(s) compatible:\n")
-    for i, a in enumerate(ranked, 1):
-        num    = f"{_B}[{i}]{_RST}"
-        destr  = f"  {_R}DESTRUCTIVE{_RST}" if a.is_destructive else f"  {_G}non-destructive{_RST}"
-        rec    = f"  {_DIM}← recommended{_RST}" if a is recommended else ""
-        print(f"  {num} {a.name:<{col_w}} "
-              f"p={a.estimated_success_probability:.2f}  "
-              f"{len(a.stages)} stage{'s' if len(a.stages) != 1 else ' '}"
-              f"{destr}{rec}")
+    def _label(a: Attack) -> str:
+        destr = "  DESTRUCTIVE" if a.is_destructive else "  non-destructive"
+        tag   = "  ← recommended" if a is recommended else ""
+        return (f"{a.name:<20} p={a.estimated_success_probability:.2f}  "
+                f"{len(a.stages)} stage{'s' if len(a.stages) != 1 else ' '}{destr}{tag}")
 
-    print(f"\n  {_B}[q]{_RST} Abort\n")
-    try:
-        raw = input(f"Select attack [{_G}{rec_idx}{_RST}]: ").strip().lower()
-    except (EOFError, KeyboardInterrupt):
-        print()
+    print()
+    idx = arrow_select([_label(a) for a in ranked],
+                       title=f"{len(ranked)} attack(s) compatible:",
+                       default=rec_idx)
+    if idx is None:
         return None
-
-    if raw == "q":
-        return None
-    if raw == "":
-        return recommended
-    try:
-        idx = int(raw)
-        if 1 <= idx <= len(ranked):
-            return ranked[idx - 1]
-    except ValueError:
-        pass
-    print(f"{_Y}Invalid choice — using recommended.{_RST}")
-    return recommended
+    return ranked[idx]
 
 
 def _stage_line(i: int, n: int, name: str) -> Callable[[bool, str], None]:
