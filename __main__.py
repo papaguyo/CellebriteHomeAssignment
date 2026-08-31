@@ -17,6 +17,7 @@ from typing import Callable
 
 from attacks import ATTACKS
 from client.tcp_client import SimulatedDeviceClient
+from framework import Attack
 from framework.device import ConnectionLostError, DeviceState
 from framework.extractor import Extractor
 from framework.selector import Selector
@@ -153,6 +154,8 @@ def main() -> int:
     parser.add_argument("--selector", default="probability",
                         choices=list(SELECTORS),
                         help="Attack selection strategy (default: probability)")
+    parser.add_argument("--auto", action="store_true",
+                        help="Skip the attack picker and run the recommended attack automatically")
     args = parser.parse_args()
 
     logging.basicConfig(
@@ -181,10 +184,15 @@ def main() -> int:
                 _no_attacks()
                 return 1
 
-            chosen = _pick_attack(compatible, winner)
-            if chosen is None:
-                print("\nAborted.")
-                return 0
+            if args.auto:
+                chosen = winner
+                print(f"\n  Auto-selected: {_B}{chosen.name}{_RST}  "
+                      f"(p={chosen.estimated_success_probability:.2f})\n")
+            else:
+                chosen = _pick_attack(compatible, winner)
+                if chosen is None:
+                    print("\nAborted.")
+                    return 0
 
             # 4. Run stages
             print(f"\n[*] Running '{chosen.name}' ({len(chosen.stages)} stages)...\n")

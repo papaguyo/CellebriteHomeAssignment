@@ -12,9 +12,41 @@ make -C simulator
 
 # Install Python dependencies
 pip install pytest
+```
 
-# Run all tests (unit + integration)
+---
+
+## Demo
+
+```bash
+./start.sh
+```
+
+Builds the simulator if needed, installs dependencies, then auto-selects the best compatible attack, runs all stages, and extracts the device filesystem — no interaction required.
+
+Optional flags are passed through to the simulator:
+
+```bash
+./start.sh --fail-stage 1        # force a stage failure
+./start.sh --drop-after-stage 0  # simulate a connection drop
+```
+
+To explore interactively (arrow-key menus, selector strategy picker):
+
+```bash
+./interactive.sh
+```
+
+---
+
+## Tests
+
+```bash
+# All tests (unit + integration)
 pytest tests/ -v
+
+# Unit tests only (no simulator needed)
+pytest tests/test_selector.py tests/test_orchestrator.py tests/test_extractor.py -v
 ```
 
 ---

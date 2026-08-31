@@ -63,7 +63,8 @@ def main():
         sys.exit(1)
 
     try:
-        subprocess.run([sys.executable, "__main__.py", "--port", str(PORT), "--log-level", args.log_level])
+        subprocess.run([sys.executable, "__main__.py", "--port", str(PORT),
+                        "--log-level", args.log_level, "--auto"])
     finally:
         sim.terminate()
         sim.wait()
