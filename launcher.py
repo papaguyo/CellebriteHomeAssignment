@@ -12,7 +12,9 @@ import os
 import socket
 import subprocess
 import sys
+import termios
 import time
+import tty
 
 from menu import arrow_select
 
@@ -78,6 +80,19 @@ def _stop_simulator() -> None:
 # Main loop
 # ---------------------------------------------------------------------------
 
+def _press_any_key() -> None:
+    sys.stdout.write("\n  press any key to return to menu…\n")
+    sys.stdout.flush()
+    fd = sys.stdin.fileno()
+    old = termios.tcgetattr(fd)
+    try:
+        tty.setcbreak(fd)
+        os.read(fd, 1)
+    finally:
+        termios.tcsetattr(fd, termios.TCSADRAIN, old)
+    print("\033[2J\033[H", end="", flush=True)
+
+
 def _header() -> None:
     title = "  Multi-Stage Attack Orchestrator  "
     bar   = "═" * len(title)
@@ -137,7 +152,7 @@ def main() -> None:
         elif choice == 2:   # Run tests
             subprocess.run([PYTHON, os.path.join(ROOT, "test_runner.py")])
 
-        print()
+        _press_any_key()
 
 
 if __name__ == "__main__":
