@@ -59,13 +59,12 @@ def main() -> None:
         labels = [name for name, _ in SUITES]
         idx = arrow_select(labels, title="Select a test suite:")
         if idx is None:
-            print("Bye.")
             break
         run_suite(idx)
         if not again():
-            print("Bye.")
             break
         print()
+    print("\033[2J\033[H", end="", flush=True)
 
 
 if __name__ == "__main__":

@@ -144,15 +144,13 @@ def main() -> None:
                             "--port", str(PORT),
                             "--selector", sel_name])
             _stop_simulator()
+            _press_any_key()
 
         elif choice == 1:   # Configure selector
             _configure_selector()
-            continue        # skip the trailing print() — header will redraw
 
         elif choice == 2:   # Run tests
             subprocess.run([PYTHON, os.path.join(ROOT, "test_runner.py")])
-
-        _press_any_key()
 
 
 if __name__ == "__main__":

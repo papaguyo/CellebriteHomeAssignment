@@ -71,7 +71,6 @@ def _device_table(state: DeviceState) -> None:
 
 
 def _pick_attack(compatible: list[Attack], recommended: Attack) -> Attack | None:
-    """Arrow-key attack picker. Returns chosen Attack or None to abort."""
     if not compatible:
         return None
 
@@ -94,7 +93,6 @@ def _pick_attack(compatible: list[Attack], recommended: Attack) -> Attack | None
 
 
 def _stage_line(i: int, n: int, name: str) -> Callable[[bool, str], None]:
-    """Print a stage progress line. Returns a done() callable that fills in the result."""
     prefix = f"  [{i}/{n}] {name} "
     dot_w  = max(2, 52 - len(prefix))
     dots   = _DIM + ("·" * dot_w) + _RST
@@ -172,12 +170,12 @@ def main() -> int:
     try:
         with SimulatedDeviceClient(args.host, args.port) as client:
 
-            # 1. Device state
+            # device state
             _section("Querying device state...")
             state = client.get_state()
             _device_table(state)
 
-            # 2. Attack selection
+            # select attack
             _section("Evaluating compatible attacks...")
             selector = SELECTORS[args.selector]()
             compatible = [a for a in ATTACKS if a.is_compatible(state)]
@@ -197,7 +195,7 @@ def main() -> int:
                     print("\nAborted.")
                     return 0
 
-            # 4. Run stages
+            # run stages
             print(f"\n[*] Running '{chosen.name}' ({len(chosen.stages)} stages)...\n")
             n = len(chosen.stages)
             for i, stage in enumerate(chosen.stages):
@@ -222,7 +220,7 @@ def main() -> int:
 
             _outcome_success(chosen.name)
 
-            # 5. Extraction
+            # extract
             if args.extract:
                 _section("Extracting files from /...")
                 print()
