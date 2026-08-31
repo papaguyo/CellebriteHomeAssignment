@@ -24,11 +24,19 @@ pip install pytest
 
 Builds the simulator if needed, installs dependencies, then auto-selects the best compatible attack, runs all stages, and extracts the device filesystem — no interaction required.
 
-Optional flags are passed through to the simulator:
+Optional flags:
 
 ```bash
-./start.sh --fail-stage 1        # force a stage failure
-./start.sh --drop-after-stage 0  # simulate a connection drop
+./start.sh --fail-stage 1        # force a stage failure at stage index 1
+./start.sh --drop-after-stage 0  # simulate a TCP connection drop
+./start.sh --probabilistic       # roll against each stage's success_probability
+./start.sh --selector priority   # use the priority-based selector
+```
+
+To see all three failure scenarios back-to-back in one command:
+
+```bash
+./demo_all.sh
 ```
 
 To explore interactively (arrow-key menus, selector strategy picker):

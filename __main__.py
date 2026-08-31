@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import argparse
 import logging
+import random
 import sys
 from typing import Callable
 
@@ -156,6 +157,8 @@ def main() -> int:
                         help="Attack selection strategy (default: probability)")
     parser.add_argument("--auto", action="store_true",
                         help="Skip the attack picker and run the recommended attack automatically")
+    parser.add_argument("--probabilistic", action="store_true",
+                        help="Roll against each stage's success_probability before executing it")
     args = parser.parse_args()
 
     logging.basicConfig(
@@ -199,6 +202,11 @@ def main() -> int:
             n = len(chosen.stages)
             for i, stage in enumerate(chosen.stages):
                 done = _stage_line(i + 1, n, stage.name)
+                if args.probabilistic and random.random() > stage.success_probability:
+                    done(False, f"probability miss (p={stage.success_probability:.2f})")
+                    _outcome_failure(chosen.name, i, stage.name,
+                                     reason=f"probability roll failed (p={stage.success_probability:.2f})")
+                    return 1
                 try:
                     result = client.run_stage(chosen.id, i)
                 except ConnectionLostError as exc:

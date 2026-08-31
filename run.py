@@ -32,6 +32,8 @@ def main():
     parser.add_argument("--selector", default="probability",
                         choices=["probability", "priority", "weighted"],
                         help="Attack selection strategy (default: probability)")
+    parser.add_argument("--probabilistic", action="store_true",
+                        help="Roll against each stage's success_probability before executing")
     parser.add_argument("--fail-stage", type=int, default=None, help="Force this stage index to fail")
     parser.add_argument("--drop-after-stage", type=int, default=None, help="Drop connection after this stage")
     parser.add_argument("--battery", type=int, default=None, help="Override simulator battery level")
@@ -66,10 +68,13 @@ def main():
         sys.exit(1)
 
     try:
-        subprocess.run([sys.executable, "__main__.py", "--port", str(PORT),
-                        "--log-level", args.log_level,
-                        "--selector", args.selector,
-                        "--auto"])
+        cmd = [sys.executable, "__main__.py", "--port", str(PORT),
+               "--log-level", args.log_level,
+               "--selector", args.selector,
+               "--auto"]
+        if args.probabilistic:
+            cmd.append("--probabilistic")
+        subprocess.run(cmd)
     finally:
         sim.terminate()
         sim.wait()
