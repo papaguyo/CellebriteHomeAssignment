@@ -1,60 +1,40 @@
 # Multi-Stage Attack Orchestrator
 
-A framework for selecting, running, and managing multi-stage attacks against mobile devices, together with a C-based device simulator and a full test suite.
+A framework for selecting and running multi-stage unlock attacks
+against mobile devices, plus a C device simulator to run them
+against and a test suite covering both.
 
 ---
 
 ## Quick start
 
 ```bash
-# Build the C simulator
 make -C simulator
-
-# Install Python dependencies
 pip install pytest
 ```
 
----
-
-## Demo
+Run the whole thing end to end:
 
 ```bash
 ./start.sh
 ```
 
-Builds the simulator if needed, installs dependencies, then auto-selects the best compatible attack, runs all stages, and extracts the device filesystem — no interaction required.
-
-Optional flags:
+This builds the simulator if needed, picks the best compatible attack, runs it, and extracts the filesystem. No input required.
 
 ```bash
-./start.sh --fail-stage 1        # force a stage failure at stage index 1
-./start.sh --drop-after-stage 0  # simulate a TCP connection drop
-./start.sh --probabilistic       # roll against each stage's success_probability
-./start.sh --selector priority   # use the priority-based selector
+./start.sh --fail-stage 1        # force stage 1 to fail
+./start.sh --drop-after-stage 0  # simulate the connection dying mid-chain
+./start.sh --probabilistic       # roll against each stage's success_probability instead of forcing success
+./start.sh --selector priority   # use the priority-based selector instead of the default
 ```
 
-To see all three failure scenarios back-to-back in one command:
+`./demo_all.sh` runs all three scenarios back to back. `./interactive.sh` gives you a menu if you want to poke at it by hand.
+
+**Tests:**
 
 ```bash
-./demo_all.sh
-```
-
-To explore interactively (arrow-key menus, selector strategy picker):
-
-```bash
-./interactive.sh
-```
-
----
-
-## Tests
-
-```bash
-# All tests (unit + integration)
-pytest tests/ -v
-
-# Unit tests only (no simulator needed)
-pytest tests/test_selector.py tests/test_orchestrator.py tests/test_extractor.py -v
+pytest tests/ -v                 # everything
+pytest tests/test_selector.py tests/test_orchestrator.py tests/test_extractor.py -v   # unit only, no simulator needed
 ```
 
 ---
@@ -62,138 +42,115 @@ pytest tests/test_selector.py tests/test_orchestrator.py tests/test_extractor.py
 ## Architecture
 
 ```
-framework/          Core Python library (no I/O of its own)
-  device.py         Device ABC + DeviceState dataclass + error types
-  stage.py          Stage & StageResult dataclasses
-  attack.py         Attack dataclass + compatibility check
-  selector.py       Selector ABC + ProbabilitySelector (default)
-  orchestrator.py   Orchestrator — selects + runs an attack
-  extractor.py      Extractor — reads files after a successful attack
+framework/          Core library, no I/O of its own
+  device.py          Device ABC, DeviceState, error types
+  stage.py           Stage & StageResult
+  attack.py           Attack dataclass + compatibility check
+  selector.py         Selector ABC
+  selectors/          probability_selector.py (default), priority_selector.py, weighted_random_selector.py
+  orchestrator.py     Picks an attack, runs it
+  extractor.py        Reads files off a device once an attack succeeds
 
-client/             Concrete Device implementations
-  fake_device.py    In-memory FakeDevice (fast unit tests, no subprocess)
-  tcp_client.py     SimulatedDeviceClient — speaks the TCP protocol
+attacks.py           The attack catalogue
+
+client/
+  fake_device.py       In-memory Device, used for unit tests
+  tcp_client.py         Talks the real protocol to the C simulator
 
 simulator/
-  simulator.c       C TCP server that behaves like a locked mobile device
+  simulator.c           C TCP server, acts like a locked device
   Makefile
 
 tests/
-  conftest.py       Shared fixtures: FakeDevice, attack registry, C subprocess
-  test_selector.py  Unit — selection logic
-  test_orchestrator.py  Unit — run/failure/connection-drop logic
-  test_extractor.py     Unit — file extraction
-  test_integration.py   Integration — real C simulator over TCP
+  conftest.py
+  test_selector.py, test_orchestrator.py, test_extractor.py   # unit
+  test_integration.py                                          # against the real C binary
 ```
 
-The `Device` ABC is the central seam. `framework/` codes against it; `client/` implements it. This means the unit tests never touch the network and the integration tests require no mocking.
+The `Device` ABC is the whole point of this layout —
+`framework/` only ever talks to that interface. Unit tests run
+against `FakeDevice` with zero mocking, and integration tests run
+the exact same code against a real socket.
 
 ---
 
 ## Design decisions
 
-### 1. Attack selection strategy
+**Picking an attack.** Several attacks can be compatible with the
+same device, so something has to rank them. I went back and forth
+between a hand-maintained priority table and something derived from
+the attack data itself, and landed on the latter.
 
-**The question:** several attacks may be compatible with the same device. Which one runs?
+`ProbabilitySelector` ranks compatible attacks by estimated success
+probability (product of stage probabilities), breaks ties by fewest
+stages, then prefers non-destructive attacks over destructive ones.
+A stage that wipes the device on failure raises the stakes enough
+that, all else equal, it should go last.
 
-**Alternatives I considered:**
+A table would work too and would be more auditable, but it means
+someone has to remember to update it every time a new attack gets
+added, that felt like the wrong default.
+I kept it pluggable via strategy design pattern
+(`Selector` is an ABC) and also implemented `PrioritySelector` and
+`WeightedRandomSelector`, since the "right" answer depends on what
+the operator cares about more, probability or auditability, and
+that's not something the framework should force.
 
-| Strategy | Pros | Cons |
-|---|---|---|
-| Priority table (fixed order) | Auditable, deterministic | Requires manual maintenance as new attacks are added |
-| Highest combined success probability | Principled, data-driven | Ignores cost/time/destructiveness |
-| Weighted score (prob + time + destructiveness) | Most realistic | Requires calibrated weights |
+**Stage failure.** The chain aborts on the first failed stage - no
+retry, no automatic fallback to another attack. A failed stage can
+leave the device in a different state than it started in (a wrong
+unlock attempt can bump a wipe counter, a partial flash can drop the
+device into DFU mode), so quietly trying something else afterward
+isn't safe without knowing what actually happened.
 
-**What I implemented:** `ProbabilitySelector` — filters compatible attacks, then picks by:
-1. Highest estimated success probability (product of all stage probabilities)
-2. Tie-break: fewest stages (simpler attack preferred)
-3. Second tie-break: non-destructive over destructive
+`Orchestrator.run()` returns which stage failed and why, and leaves
+it to the caller to decide whether to retry, escalate, or stop,
+that decision needs device-specific context the orchestrator
+doesn't have.
 
-The selector is a pluggable strategy (`Selector` ABC), so a `PrioritySelector` or `WeightedSelector` can be swapped in with one constructor argument. The default gives a concrete, explainable answer and shows extensibility.
+**Extraction is separate from attacks.** `Extractor` just uses a
+working `Device` connection, it doesn't know or care how that
+connection was obtained. This is also why the protocol has `LIST`
+in addition to `READ`. `extract_all` needs to walk the filesystem,
+not just read a path it's handed.
 
-**Why probability over a priority table:** A table would require knowing upfront which attack to prefer for each device family. Probability makes the ranking emerge from the attack definitions themselves, which scales better as the attack catalogue grows.
+**Simulator is single-threaded, one connection at a time.** Real
+attacks are inherently sequential. one process one device, so
+there's no reason to complicate the simulator with concurrency, and
+it makes the connection drop tests much easier to reason about.
 
-**Why non-destructive preferred at equal rank:** On a real device, a destructive attack that wipes on failure raises the stakes considerably. All else being equal, try the safer path first.
-
-### 2. Stage failure semantics
-
-**The question:** what happens when a stage fails?
-
-**Decision:** abort the chain immediately on the first stage failure. No retry, no automatic fallback to a different attack.
-
-**Why:** a failed stage on a real device may have mutated device state — for example, an incorrect unlock attempt increments a wipe counter, or a partial flash puts the device in DFU mode. Silently retrying a different attack after that is dangerous. The `Orchestrator` returns an `AttackOutcome` that tells the caller exactly which stage failed and why; the caller can decide whether a retry or fallback is safe given that information.
-
-This is documented explicitly in `Orchestrator`'s docstring.
-
-### 3. No auto-fallback
-
-A deliberate consequence of the failure policy above: the orchestrator tries the top-ranked attack and returns. It does not loop through the attack list on failure. This keeps the `Orchestrator` stateless between calls and puts the retry/escalation policy in the caller, where device-specific context lives.
-
-### 4. Extraction as a separate layer
-
-Extraction (`Extractor`) is built on top of the `Device` interface, not baked into the attack. The attack gives you a working `Device` connection; the `Extractor` uses it. This means:
-- An attack doesn't need to know what will be extracted.
-- `extract_all` works the same way whether the device is a `FakeDevice` or `SimulatedDeviceClient`.
-- The protocol must support `LIST` + `READ`, not just `READ` — a constraint I designed into the simulator from the start.
-
-### 5. Simulator design choices
-
-**Single-threaded accept loop:** The simulator handles one connection at a time. Real device interactions are inherently sequential (one Python process, one device, one attack at a time), so this is correct, simpler, and easier to reason about for connection-drop tests.
-
-**Scripted failure modes via CLI flags:** `--fail-stage N` and `--drop-after-stage N` make integration test scenarios reproducible without relying on probability. Tests that need specific failure points pass the right flag; tests that need success use the default simulator.
-
-**Hardcoded in-memory file tree:** The default simulator has a small fixed set of fake files so `extract_all` tests don't need to set up a real directory. The `--sim-files <dir>` flag exists for more realistic scenarios.
+**Failure modes are scripted via flags**, not left to chance:
+`--fail-stage N` and `--drop-after-stage N` make integration tests
+deterministic. Random probability rolls are also supported
+(`--probabilistic`) for the demo, but the tests don't rely on them.
 
 ---
 
 ## Protocol
 
-Text-based, newline-delimited commands. Responses are single-line JSON. Binary file content uses a length-prefix envelope after the JSON header line.
+Newline-delimited text commands, single-line JSON responses. File
+bytes are sent raw after a `{"size": N}` header rather than
+base64-encoded, no reason to inflate every extraction by 33% for
+no benefit.
 
 | Client sends | Server responds |
 |---|---|
 | `GET_STATE\n` | `{"battery":80,"ios_version":"16.5","model":"iPhone14,2","is_locked":true}\n` |
 | `RUN_STAGE <attack_id> <stage_idx>\n` | `{"status":"SUCCESS"}\n` or `{"status":"FAIL","reason":"..."}\n` |
 | `LIST <path>\n` | `{"files":["contacts.db","media","logs"]}\n` |
-| `READ <path>\n` | `{"size":N}\n` followed by exactly N bytes (no trailing newline) |
-| `QUIT\n` | server closes the connection |
+| `READ <path>\n` | `{"size":N}\n` then exactly N raw bytes |
+| `QUIT\n` | connection closes |
 
-**Why text/JSON over binary:** Easier to debug with `nc` or `telnet`, easier to document, no endianness concerns. File content uses a binary envelope because file data is arbitrary bytes.
+Text/JSON over a custom binary format mostly because I wanted to
+poke at it with `nc` while debugging. that turned out to be worth
+it.
 
-**Simulator CLI flags:**
-
-| Flag | Description |
-|---|---|
-| `--port <n>` | TCP port (default 9000) |
-| `--model <str>` | Device model string |
-| `--ios <str>` | iOS version string |
-| `--battery <n>` | Battery percentage |
-| `--locked <0\|1>` | is_locked flag |
-| `--fail-stage <n>` | Force stage index n to return FAIL |
-| `--drop-after-stage <n>` | Drop TCP connection after completing stage n |
-| `--sim-files <dir>` | Serve real files from this directory root |
-
----
-
-## Running the simulator manually
+**Simulator flags:** `--port`, `--model`, `--ios`, `--battery`, `--locked`, `--fail-stage`, `--drop-after-stage`, `--sim-files <dir>` (serve a real directory instead of the built-in fake files).
 
 ```bash
-# Default configuration
-./simulator/simulator
-
-# iPhone 15 on iOS 17, low battery
 ./simulator/simulator --model "iPhone15,2" --ios "17.0" --battery 12
-
-# Fail every stage 1
-./simulator/simulator --fail-stage 1
-
-# Drop connection after stage 0 completes
 ./simulator/simulator --drop-after-stage 0
-```
 
-Connect with:
-
-```bash
 nc localhost 9000
 GET_STATE
 RUN_STAGE my_attack 0
@@ -206,20 +163,31 @@ QUIT
 
 ## Test coverage
 
-| File | What it tests | Device |
+| File | Covers | Against |
 |---|---|---|
-| `test_selector.py` | Selection logic, tie-breaking, compatibility filtering | None (pure logic) |
-| `test_orchestrator.py` | Success path, stage failure at each position, connection drop, no-attack case | FakeDevice |
-| `test_extractor.py` | `read()`, `extract_all()`, subtree extraction, empty device | FakeDevice |
-| `test_integration.py` | Full round-trips, scripted failures, connection drop, extract_all | Real C binary |
+| `test_selector.py` | Ranking, tie-breaking, compatibility filtering | pure logic |
+| `test_orchestrator.py` | Success path, failure at each stage, connection drop, no compatible attack | `FakeDevice` |
+| `test_extractor.py` | `read()`, `extract_all()`, subtree extraction, empty device | `FakeDevice` |
+| `test_integration.py` | Same scenarios as above, but for real: full round trip, scripted failures, connection drop mid-chain, `extract_all` over the wire | real C binary |
 
-The integration tests compile the binary once per session and spin up a fresh subprocess per test with a random port, so they can run in parallel without port conflicts.
+Integration tests build the binary once per session and spawn a fresh subprocess on a random port per test, so they can run in parallel.
 
 ---
 
 ## What I'd add with more time
 
-- **Retry logic per stage** as an optional Attack-level parameter (e.g. `max_retries=2`), only safe to use when the stage is marked idempotent.
-- **Weighted selector** combining probability, estimated duration, and destructiveness with tunable weights.
-- **Concurrent multi-device orchestration** — the framework is already stateless per device, so wrapping `Orchestrator.run()` in a `ThreadPoolExecutor` is straightforward.
-- **Structured logging** throughout the orchestration loop so failed chains produce a complete audit trail.
+* Retry logic per stage, but only for stages explicitly marked
+  idempotent. Anything that touches a wipe counter shouldn't get
+  auto-retried.
+
+* Running attacks against a fleet of devices at once. The framework
+  is already stateless per device, so wrapping `Orchestrator.run()`
+  in a thread pool isn't a big leap.
+
+* A small REST API so orchestration can be triggered remotely
+  instead of only from a script.
+
+* An audit log, persisting every run outcome (attack chosen,
+  per-stage results, files pulled). This is the one I'd actually
+  prioritize first, it's the kind of thing that matters in a
+  forensic context and right now this doesn't address it at all.
